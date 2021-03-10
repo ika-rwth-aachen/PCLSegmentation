@@ -1,0 +1,9 @@
+*.pyc
+venv
+
+\.idea/
+
+data/
+logs/
+models/
+output/
