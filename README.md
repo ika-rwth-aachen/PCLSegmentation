@@ -1,4 +1,5 @@
 ## Semantic Segmentation of LiDAR Point Clouds in Tensorflow 2.4
+[![DOI](https://zenodo.org/badge/346761395.svg)](https://zenodo.org/badge/latestdoi/346761395)
 
 ![](assets/video2.gif)
 
