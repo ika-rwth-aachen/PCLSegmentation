@@ -149,3 +149,17 @@ LiDAR Point Cloud](https://github.com/xuanyuzhou98/SqueezeSegV2)
 [Till Beemelmanns](https://github.com/TillBeemelmanns)
 
 Mail: `till.beemelmanns (at) ika.rwth-aachen.de`
+
+### Citation 
+
+We hope the provided code can help in your research. If this is the case, please cite:
+
+```
+@misc{Beemelmanns2021,
+  author = {Till Beemelmanns},
+  title = {Semantic Segmentation of LiDAR Point Clouds in Tensorflow 2.4},
+  year = 2021,
+  url = {https://github.com/ika-rwth-aachen/PCLSegmentation},
+  doi={10.5281/zenodo.4665751}
+}
+```
