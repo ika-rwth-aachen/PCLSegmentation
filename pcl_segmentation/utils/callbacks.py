@@ -48,7 +48,7 @@ class TensorBoard(tf.keras.callbacks.TensorBoard):
     class_color_map = self.model.CLS_COLOR_MAP
 
     # get first batch of dataset
-    (lidar_input, lidar_mask), label, _ = self.dataset[0]
+    (lidar_input, lidar_mask), label, _ = self.dataset.take(1).get_single_element()
 
     probabilities, predictions = self.model([lidar_input, lidar_mask])
 
@@ -56,7 +56,7 @@ class TensorBoard(tf.keras.callbacks.TensorBoard):
     predictions = predictions[:self.num_images, :, :].numpy()
 
     # label and prediction visualizations
-    label_image = class_color_map[label.reshape(-1)].reshape([self.num_images, label.shape[1], label.shape[2], 3])
+    label_image = class_color_map[label.numpy().reshape(-1)].reshape([self.num_images, label.shape[1], label.shape[2], 3])
     pred_image = class_color_map[predictions.reshape(-1)].reshape([self.num_images, label.shape[1], label.shape[2], 3])
 
     # confusion matrix visualization
@@ -66,7 +66,7 @@ class TensorBoard(tf.keras.callbacks.TensorBoard):
 
     with self.custom_tb_writer.as_default():
       tf.summary.image('Images/Depth Image',
-                       lidar_input[:self.num_images, :, :, [4]],
+                       lidar_input.numpy()[:self.num_images, :, :, [4]],
                        max_outputs=batch_size,
                        step=epoch)
       tf.summary.image('Images/Label Image',

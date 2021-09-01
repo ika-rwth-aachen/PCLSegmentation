@@ -24,9 +24,8 @@
 
 import tensorflow as tf
 import argparse
-import tqdm
 
-from data_loader import DataLoaderSeq
+from data_loader import DataLoader
 from utils.util import confusion_matrix_to_iou_recall_precision
 from utils.args_loader import load_model_config
 
@@ -36,31 +35,33 @@ def evaluation(arg):
 
   config.DATA_AUGMENTATION = False
   config.BATCH_SIZE = 1
-  dataset = DataLoaderSeq(arg.image_set, arg.data_path, config, use_fraction=arg.dataset_fraction)
+  dataset = DataLoader(arg.image_set, arg.data_path, config).write_tfrecord_dataset().read_tfrecord_dataset()
 
   model = tf.keras.models.load_model(arg.path_to_model)
   miou_tracker = tf.metrics.MeanIoU(num_classes=config.NUM_CLASS, name="MeanIoU")
 
-  print("Performing Evaluation on {0} samples".format(len(dataset)))
+  print("Performing Evaluation")
 
-  for i in tqdm.tqdm(range(len(dataset))):
-    (lidar_input, lidar_mask), label, loss_weight = dataset[i]
-    probabilities, predictions = model((lidar_input, lidar_mask))
+  for sample in dataset:
+    (lidar, mask), label, weight = sample
+    probabilities, predictions = model([lidar, mask])
     miou_tracker.update_state(label, predictions)
 
   iou, recall, precision = confusion_matrix_to_iou_recall_precision(miou_tracker.total_cm)
 
   for i, cls in enumerate(config.CLASSES):
-    print("IoU " + cls +" :" + str(iou[i].numpy()))
-    print("R " + cls +" :" + str(recall[i].numpy()))
-    print("P " + cls +" :" + str(precision[i].numpy()))
+    print(cls.upper())
+    print("IoU:       " + str(iou[i].numpy()))
+    print("Recall:    " + str(recall[i].numpy()))
+    print("Precision: " + str(precision[i].numpy()))
     print("")
-  print(miou_tracker.result().numpy())
+  print("MIoU: {} ".format(miou_tracker.result().numpy()))
 
 
 if __name__ == '__main__':
   physical_devices = tf.config.experimental.list_physical_devices('GPU')
-  tf.config.experimental.set_memory_growth(physical_devices[0], True)
+  if len(physical_devices) > 0:
+    tf.config.experimental.set_memory_growth(physical_devices[0], True)
 
   parser = argparse.ArgumentParser(description='Parse Flags for the evaluation script!')
   parser.add_argument('-d', '--data_path', type=str,
@@ -69,8 +70,6 @@ if __name__ == '__main__':
                       help='Default: `val`. But can also be train, val or test')
   parser.add_argument('-t', '--eval_dir', type=str,
                       help="Directory where to write the Tensorboard logs and checkpoints")
-  parser.add_argument('-f', '--dataset_fraction', type=float, default=1.0,
-                      help='Use only a fraction x of the dataset')
   parser.add_argument('-p', '--path_to_model', type=str,
                       help='Path to the model')
   parser.add_argument('-m', '--model', type=str,

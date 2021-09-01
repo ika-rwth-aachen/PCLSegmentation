@@ -26,7 +26,7 @@ import os.path
 
 import argparse
 
-from data_loader import DataLoaderSeq
+from data_loader import DataLoader
 from utils.callbacks import TensorBoard
 from utils.util import *
 from utils.args_loader import load_model_config
@@ -35,10 +35,10 @@ from utils.args_loader import load_model_config
 def train(arg):
   config, model = load_model_config(args.model)
 
-  train = DataLoaderSeq("train", arg.data_path, config, use_fraction=arg.dataset_fraction)
-  val = DataLoaderSeq("val", arg.data_path, config)
+  train = DataLoader("train", arg.data_path, config).write_tfrecord_dataset().read_tfrecord_dataset()
+  val = DataLoader("val", arg.data_path, config).write_tfrecord_dataset().read_tfrecord_dataset()
 
-  tensorboard_callback = TensorBoard(arg.train_dir, val)
+  tensorboard_callback = TensorBoard(arg.train_dir, val, profile_batch=(95, 100))
   checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(os.path.join(arg.train_dir, "checkpoint"))
 
   lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(
@@ -55,9 +55,6 @@ def train(arg):
             validation_data=val,
             epochs=arg.epochs,
             callbacks=[tensorboard_callback, checkpoint_callback],
-            workers=16,
-            max_queue_size=100,
-            use_multiprocessing=False
             )
 
   model.save(filepath=os.path.join(arg.train_dir, 'model'))
@@ -65,7 +62,8 @@ def train(arg):
 
 if __name__ == '__main__':
   physical_devices = tf.config.experimental.list_physical_devices('GPU')
-  tf.config.experimental.set_memory_growth(physical_devices[0], True)
+  if len(physical_devices) > 0:
+    tf.config.experimental.set_memory_growth(physical_devices[0], True)
 
   parser = argparse.ArgumentParser(description='Parse Flags for the training script!')
   parser.add_argument('-d', '--data_path', type=str,
@@ -76,8 +74,6 @@ if __name__ == '__main__':
                       help='Maximal number of training epochs')
   parser.add_argument('-t', '--train_dir', type=str,
                       help="Directory where to write the Tensorboard logs and checkpoints")
-  parser.add_argument('-f', '--dataset_fraction', type=float, default=1.0,
-                      help='Use only a fraction x of the dataset')
   parser.add_argument('-m', '--model', type=str,
                       help='Model name either `squeezesegv2`, `darknet53`, `darknet21`')
   args = parser.parse_args()

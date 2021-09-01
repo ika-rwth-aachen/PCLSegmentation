@@ -25,131 +25,273 @@
 import os
 import random
 import numpy as np
-import scipy.ndimage
 import tensorflow as tf
 
 
-class DataLoaderSeq(tf.keras.utils.Sequence):
-  def __init__(self, image_set, data_path, mc, use_fraction=None):
+def _tensor_feature(value):
+  """Returns an int64_list from a bool / enum / int / uint."""
+  return tf.train.Feature(bytes_list=tf.train.BytesList(value=[tf.io.serialize_tensor(value).numpy()]))
+
+
+class DataLoader:
+  def __init__(self, dataset_split, dataset_root_path, mc):
+    """
+    Arguments:
+      dataset_split -- String containing "train", "val" or "test"
+      dataset_root_path -- String containing path to the root directory of the splits
+    """
     self.mc = mc
 
-    validation = True if image_set == "val" else False
+    validation = True if dataset_split == "val" else False
     self._batch_size = mc.BATCH_SIZE if not validation else 1
     self._data_augmentation = mc.DATA_AUGMENTATION if not validation else False
 
-    self._image_set = image_set
-    self._data_root_path = data_path
-    self._lidar_2d_path = os.path.join(self._data_root_path, image_set)
+    self._dataset_split = dataset_split
+    self._dataset_root_path = dataset_root_path
+    self._dataset_path = os.path.join(self._dataset_root_path, dataset_split)
+    self._sample_pathes = tf.io.gfile.glob(os.path.join(self._dataset_path, "*.npy"))
 
-    self._image_idx = self._load_image_set_idx()
+  @staticmethod
+  def random_y_flip(lidar, mask, label, weight, prob=0.5):
+    """
+    Randomly flips a Numpy ndArray along the second axis (y-axis) with probability prob
 
-    if use_fraction is not None and use_fraction != 1.0:
-      print("Use only {0} training samples".format(use_fraction))
-      self._image_idx = self._image_idx[: int(len(self._image_idx) * use_fraction)]
+    Arguments:
+      lidar -- Numpy ndArray of shape [height, width, channels]
+      mask -- Numpy ndArray of shape [height, width]
+      label -- Numpy ndArray of shape [height, width]
+      weight -- Numpy ndArray of shape [height, width]
+      prob -- Float which describes the probability that the flip is applied on the sample.
 
-  @property
-  def image_idx(self):
-    return self._image_idx
+    Returns:
+      lidar -- Numpy ndArray of shape [height, width, channels]
+      mask -- Numpy ndArray of shape [height, width]
+      label -- Numpy ndArray of shape [height, width]
+      weight -- Numpy ndArray of shape [height, width]
+    """
+    # creates a random float between 0 and 1
+    random_float = tf.random.uniform(shape=[], minval=0, maxval=1, dtype=tf.float16)
 
-  @property
-  def image_set(self):
-    return self._image_set
+    (lidar, mask, label, weight) = tf.cond(
+                             pred=random_float > prob,
+                             true_fn=lambda: (tf.reverse(lidar, axis=[1]),
+                                              tf.reverse(mask, axis=[1]),
+                                              tf.reverse(label, axis=[1]),
+                                              tf.reverse(weight, axis=[1])
+                                              ),
+                             false_fn=lambda: (lidar, mask, label, weight)
+                             )
 
-  @property
-  def data_root_path(self):
-    return self._data_root_path
+    return lidar, mask, label, weight
 
-  def _load_image_set_idx(self):
-    image_set_file = os.path.join(
-      self._data_root_path, 'ImageSet', self._image_set + '.txt')
-    assert os.path.exists(image_set_file), \
-      'File does not exist: {}'.format(image_set_file)
+  @staticmethod
+  def random_shift(lidar, mask, label, weight, shift=75):
+    """
+    Randomly shifts a sample on the y-axis
 
-    with open(image_set_file) as f:
-      image_idx = [x.strip() for x in f.readlines()]
+    Arguments:
+      lidar -- Numpy ndArray of shape [height, width, channels]
+      mask -- Numpy ndArray of shape [height, width]
+      label -- Numpy ndArray of shape [height, width]
+      weight -- Numpy ndArray of shape [height, width]
+      shift -- Integer which defines the maximal amount of the random horizontal shift
 
-    # shuffle files
-    random.shuffle(image_idx)
+    Returns :
+      sample -- Numpy ndArray of shape [height, width, channels]
+    """
+    # Generate a random integer between in [-shift, shift]
+    random = tf.random.uniform(shape=[], minval=-shift, maxval=shift, dtype=tf.int32)
 
-    return image_idx
+    lidar = tf.roll(lidar, random, axis=1)
+    mask = tf.roll(mask, random, axis=1)
+    label = tf.roll(label, random, axis=1)
+    weight = tf.roll(weight, random, axis=1)
 
-  def _lidar_2d_path_at(self, idx):
-    lidar_2d_path = os.path.join(self._lidar_2d_path, idx + '.npy')
+    return lidar, mask, label, weight
 
-    assert os.path.exists(lidar_2d_path), \
-      'File does not exist: {}'.format(lidar_2d_path)
-    return lidar_2d_path
+  def parse_sample(self, sample_path):
+    """
+    Parses a data sample from a file path an returns a lidar tensor, a mask tensor and a label tensor
 
-  def __len__(self):
-    return len(self._image_idx) // self._batch_size
+    Arguments:
+      sample_path -- String - File path to a sample *.npy file
 
-  def __getitem__(self, idx):
-    mc = self.mc
-    batch_idx = self._image_idx[idx * self._batch_size:(idx + 1) * self._batch_size]
+    Returns:
+      lidar -- numpy ndarray of shape [height, width, num_channels] containing the lidar data
+      mask -- numpy ndarray of shape  [height, width] containing a boolean mask
+      label -- numpy ndarray of shape [height, width] containing the label as segmentation map
+      weight -- numpy ndarray of shape [height, width] containing the weighting for each class
+    """
 
-    lidar_per_batch = []
-    lidar_mask_per_batch = []
-    label_per_batch = []
-    weight_per_batch = []
+    # Load numpy sample
+    sample = np.load(sample_path.numpy()).astype(np.float32, copy=False)
 
-    for idx in batch_idx:
-      # load data
-      record = np.load(self._lidar_2d_path_at(idx)).astype(np.float32, copy=False)
-      INPUT_MEAN = mc.INPUT_MEAN
-      INPUT_STD = mc.INPUT_STD
-      if self._data_augmentation:
-        if mc.RANDOM_FLIPPING:
-          if np.random.rand() > 0.5:
-            # flip y
-            record = record[:, ::-1, :]
-            record[:, :, 1] *= -1
-            INPUT_MEAN[:, :, 1] *= -1
-        if mc.RANDOM_SHIFT:
-          random_y_shift = np.random.random_integers(low=-75, high=75)
-          record = scipy.ndimage.shift(input=record,
-                                       shift=[0, random_y_shift, 0],
-                                       order=0,
-                                       mode='constant',
-                                       cval=0.0)
+    # Get x, y, z, intensity, depth
+    lidar = sample[:, :, :5]
 
-      lidar = record[:, :, :5]  # x, y, z, intensity, depth
-      lidar_mask = np.reshape(  # binary mask
-        (lidar[:, :, 4] > 0),
-        [mc.ZENITH_LEVEL, mc.AZIMUTH_LEVEL, 1]
-      )
-      # normalize
-      lidar = (lidar - INPUT_MEAN) / INPUT_STD
+    # Compute binary mask: True where the depth is bigger then 0, false in any other case
+    mask = lidar[:, :, 4] > 0
 
-      # set input on all channels to zero where no points are present
-      lidar[~np.squeeze(lidar_mask)] = 0.0
+    # Normalize input data using the mean and standard deviation
+    lidar = (lidar - self.mc.INPUT_MEAN) / self.mc.INPUT_STD
 
-      # append mask to lidar input
-      lidar = np.append(lidar, lidar_mask, axis=2)
+    # Set lidar on all channels to zero where the mask is False. Ie. where no points are present
+    lidar[~mask] = 0.0
 
-      # get label label from record
-      label = record[:, :, 5]
+    # Add Dimension to mask to obtain a tensor of shape [height, width, 1]
+    mask = np.expand_dims(mask, -1)
 
-      # set label to None class where no points are present
-      label[~np.squeeze(lidar_mask)] = mc.CLASSES.index("None")
+    # Append mask to lidar input
+    lidar = np.append(lidar, mask, axis=2)
 
-      weight = np.zeros(label.shape)
-      for l in range(mc.NUM_CLASS):
-        weight[label == l] = mc.CLS_LOSS_WEIGHT[int(l)]
+    # Squeeze mask
+    mask = np.squeeze(mask)
 
-      # Append all the data
-      lidar_per_batch.append(lidar)
-      label_per_batch.append(label)
-      lidar_mask_per_batch.append(lidar_mask)
-      weight_per_batch.append(weight)
+    # Get segmentation map from sample
+    label = sample[:, :, 5]
 
-    lidar_per_batch = np.array(lidar_per_batch)
-    label_per_batch = np.array(label_per_batch)
-    lidar_mask_per_batch = np.array(lidar_mask_per_batch)
-    weight_per_batch = np.array(weight_per_batch)
+    # set label to None class where no points are present
+    label[~mask] = self.mc.CLASSES.index("None")
 
-    lidar_per_batch = lidar_per_batch.astype('float32')
-    label_per_batch = label_per_batch.astype('int32')
-    lidar_mask_per_batch = lidar_mask_per_batch.astype('bool')
-    weight_per_batch = weight_per_batch.astype('float32')
+    # construct class-wise weighting defined in the configuration
+    weight = np.zeros(label.shape)
+    for l in range(self.mc.NUM_CLASS):
+      weight[label == l] = self.mc.CLS_LOSS_WEIGHT[int(l)]
 
-    return (lidar_per_batch, lidar_mask_per_batch), label_per_batch, weight_per_batch
+    return lidar.astype('float32'), mask.astype('bool'), label.astype('int32'), weight.astype('float32')
+
+  @staticmethod
+  def serialize_sample(lidar, mask, label, weight):
+    """
+    Creates a tf.train.Example message ready to be written to a file.
+    Arguments:
+      lidar -- numpy ndarray of shape [height, width, num_channels] containing the lidar data
+      mask -- numpy ndarray of shape  [height, width] containing a boolean mask
+      label -- numpy ndarray of shape [height, width] containing the label as segmentation map
+      weight -- numpy ndarray of shape [height, width] containing the weighting for each class
+
+    Returns:
+      example_proto -- Serialized train sample as String
+    """
+    feature = {
+        'lidar': _tensor_feature(lidar),
+        'mask': _tensor_feature(mask),
+        'label': _tensor_feature(label),
+        'weight': _tensor_feature(weight)
+    }
+    example_proto = tf.train.Example(features=tf.train.Features(feature=feature))
+    return example_proto.SerializeToString()
+
+  def tf_serialize_example(self, lidar, mask, label, weight):
+    """
+    Wrapper function for self.serialize_sample
+
+    Arguments:
+      lidar -- numpy ndarray of shape [height, width, num_channels] containing the lidar data
+      mask -- numpy ndarray of shape  [height, width] containing a boolean mask
+      label -- numpy ndarray of shape [height, width] containing the label as segmentation map
+      weight -- numpy ndarray of shape [height, width] containing the weighting for each class
+
+    Returns:
+      example_proto -- Serialized train sample as String
+    """
+    tf_string = tf.py_function(
+      self.serialize_sample,
+      (lidar, mask, label, weight),   # Pass these args to the above function.
+      tf.string)                      # The return type is `tf.string`.
+    return tf.reshape(tf_string, ())  # The result is a scalar.
+
+  def serialize_dataset(self, sample_pathes):
+    """
+    Arguments:
+      sample_pathes -- List of Strings which contain pathes for the training samples
+
+    Returns:
+      dataset -- tf.data.Dataset with serialized data
+    """
+    random.shuffle(sample_pathes)
+
+    # create a tf.data.Dataset using sample_pathes
+    dataset = tf.data.Dataset.from_tensor_slices(sample_pathes)
+
+    # Apply parse_sample and read the *.npy file
+    dataset = dataset.map(lambda sample:
+                          tf.py_function(self.parse_sample, [sample], [tf.float32, tf.bool, tf.int32, tf.float32]),
+                          num_parallel_calls=tf.data.AUTOTUNE)
+
+    # Apply self.tf_serialize_example on the parsed sample
+    dataset = dataset.map(self.tf_serialize_example, num_parallel_calls=tf.data.AUTOTUNE)
+    return dataset
+
+  def write_tfrecord_dataset(self):
+    """
+    Write the TFRecord file for the current dataset. The TFRecord file is automatically written to
+    self._dataset_root_path with the name train.tfrecord or val.tfrecord or test.tfrecord. If the file already exists
+    this processing part is skipped.
+    """
+    filename = os.path.join(self._dataset_root_path, self._dataset_split + ".tfrecord")
+
+    if os.path.isfile(filename):
+      print("TFRecord exists at {0}. Skipping TFRecord writing.".format(filename))
+    else:
+      print("Writing TFRecord to {0}".format(filename))
+      serialized_dataset = self.serialize_dataset(self._sample_pathes)
+      writer = tf.data.experimental.TFRecordWriter(filename)
+      writer.write(serialized_dataset)
+    return self
+
+  def parse_proto(self, example_proto):
+    """
+    Deserializes the sample proto String encoded with self.serialize_sample back to tf.Tensors.
+    Also applies augmentation functions to the sample defined in the config.
+
+    Arguments:
+      example_proto -- Sample serialized as proto String
+    Returns:
+      lidar -- numpy ndarray of shape [height, width, num_channels] containing the lidar data
+      mask -- numpy ndarray of shape  [height, width] containing a boolean mask
+      label -- numpy ndarray of shape [height, width] containing the label as segmentation map
+      weight -- numpy ndarray of shape [height, width] containing the weighting for each class
+    """
+
+    feature_description = {
+      'lidar': tf.io.FixedLenFeature([], tf.string),
+      'mask': tf.io.FixedLenFeature([], tf.string),
+      'label': tf.io.FixedLenFeature([], tf.string),
+      'weight': tf.io.FixedLenFeature([], tf.string),
+    }
+    # Parse the input `tf.train.Example` proto using the dictionary above.
+    example = tf.io.parse_single_example(example_proto, feature_description)
+
+    lidar = tf.io.parse_tensor(example["lidar"], out_type=tf.float32)
+    mask = tf.io.parse_tensor(example["mask"], out_type=tf.bool)
+    label = tf.io.parse_tensor(example["label"], out_type=tf.int32)
+    weight = tf.io.parse_tensor(example["weight"], out_type=tf.float32)
+
+    lidar = tf.reshape(lidar, shape=[self.mc.ZENITH_LEVEL, self.mc.AZIMUTH_LEVEL, self.mc.NUM_FEATURES])
+    mask = tf.reshape(mask, shape=[self.mc.ZENITH_LEVEL, self.mc.AZIMUTH_LEVEL])
+    label = tf.reshape(label, shape=[self.mc.ZENITH_LEVEL, self.mc.AZIMUTH_LEVEL])
+    weight = tf.reshape(weight, shape=[self.mc.ZENITH_LEVEL, self.mc.AZIMUTH_LEVEL])
+
+    if self._data_augmentation:
+        # Perform the random left-right flip augmentation
+        lidar, mask, label, weight = self.random_y_flip(lidar, mask, label, weight)
+        # Perform the random left-right shift augmentation
+        lidar, mask, label, weight = self.random_shift(lidar, mask, label, weight)
+
+    return (lidar, mask), label, weight
+
+  def read_tfrecord_dataset(self, buffer_size=200):
+    """
+    Arguments:
+      buffer_size -- Shuffle buffer size
+    Returns:
+      dataset -- tf.data.Dataset containing the dataset
+    """
+    filename = os.path.join(self._dataset_root_path, self._dataset_split + ".tfrecord")
+    raw_dataset = tf.data.TFRecordDataset([filename], num_parallel_reads=tf.data.AUTOTUNE)
+    dataset = raw_dataset.map(self.parse_proto, num_parallel_calls=tf.data.AUTOTUNE)
+    dataset = dataset.shuffle(buffer_size)
+    dataset = dataset.batch(self._batch_size, drop_remainder=True)
+    dataset = dataset.prefetch(tf.data.AUTOTUNE)
+    return dataset

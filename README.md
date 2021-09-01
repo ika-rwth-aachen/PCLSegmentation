@@ -109,8 +109,35 @@ $ python3 inference.py \
 --model=squeezesegv2
 ```
 
+## Docker
+We also provide a docker environment for __training__, __evaluation__ and __inference__. All script can be found in the directory `docker`.
+
+First, build the environment with 
+```bash
+# docker
+./docker_build.sh
+```
+
+Then you can execute the sample training with
+```bash
+# docker
+./docker_train.sh
+```
+
+and you could evaluate the trained model with
+```bash
+# docker
+./docker_eval.sh
+```
+
+For inference on the sample dataset execute:
+```bash
+# docker
+./docker_inference.sh
+```
+
 ## Tensorboard
-The implemention also contains a Tensorboard callback which visualizes the most important metrics such as the __confusion
+The implementation also contains a Tensorboard callback which visualizes the most important metrics such as the __confusion
 matrix__, __IoUs__, __MIoU__, __Recalls__, __Precisions__, __Learning Rates__, different __losses__ and the current model
 __prediction__ on a data sample. The callbacks are evoked by Keras' `model.fit()` function.
 
@@ -140,8 +167,8 @@ LiDAR Point Cloud](https://github.com/xuanyuzhou98/SqueezeSegV2)
 
 
 ### TODO
-- [ ] Write `.tfevents` for the evaluation method
-- [ ] Integrate data normalization into the Dataloader class
+- [x] Faster input pipeline using TFRecords preprocessing
+- [x] Docker support
 - [ ] Implement CRF Postprocessing for SqueezeSegV2
 - [ ] Implement a Dataloader for the Semantic Kitti dataset
 
