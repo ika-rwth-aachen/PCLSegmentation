@@ -22,4 +22,4 @@
 # SOFTWARE.
 # ==============================================================================
 
-from .data_loader import DataLoaderSeq
+from .data_loader import DataLoader

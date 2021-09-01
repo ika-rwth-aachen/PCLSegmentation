@@ -25,6 +25,7 @@
 import os.path
 import glob
 
+import tqdm
 from PIL import Image
 import argparse
 
@@ -40,32 +41,38 @@ def inference(arg):
   if not os.path.exists(arg.output_dir):
     os.makedirs(arg.output_dir)
 
-  for f in list(glob.iglob(arg.input_path)):
+  for f in tqdm.tqdm(list(glob.iglob(arg.input_path))):
     print("Process: {0}".format(f))
 
     sample = np.load(f).astype(np.float32, copy=False)
-    lidar_input = sample[:, :, :5]
-    label_gt = sample[:, :, 5]
 
-    lidar_mask = np.reshape(  # binary mask
-      (lidar_input[:, :, 4] > 0),
-      [config.ZENITH_LEVEL, config.AZIMUTH_LEVEL, 1]
-    )
+    # Get x, y, z, intensity, depth
+    lidar = sample[:, :, :5]
 
-    # normalize input
-    lidar_input = (lidar_input - config.INPUT_MEAN) / config.INPUT_STD
+    # Compute binary mask: True where the depth is bigger then 0, false in any other case
+    mask = lidar[:, :, 4] > 0
 
-    # set input on all channels to zero where no points are present
-    lidar_input[~np.squeeze(lidar_mask)] = 0.0
+    # Normalize input data using the mean and standard deviation
+    lidar = (lidar - config.INPUT_MEAN) / config.INPUT_STD
 
-    # append mask to lidar input
-    lidar_input = np.append(lidar_input, lidar_mask, axis=2)
+    # Set lidar on all channels to zero where the mask is False. Ie. where no points are present
+    lidar[~mask] = 0.0
+
+    # Append mask to lidar input
+    lidar = np.append(lidar, np.expand_dims(mask, -1), axis=2)
+
+    # Get segmentation map from sample
+    label = sample[:, :, 5]
+
+    # set label to None class where no points are present
+    label[~mask] = config.CLASSES.index("None")
 
     # add batch dim
-    lidar_input = np.expand_dims(lidar_input, axis=0)
-    lidar_mask = np.expand_dims(lidar_mask, axis=0)
+    lidar = np.expand_dims(lidar, axis=0)
+    mask = np.expand_dims(mask, axis=0)
 
-    probabilities, predictions = model((lidar_input, lidar_mask))
+    # execute model
+    probabilities, predictions = model([lidar, mask])
 
     # to numpy and remove batch dimension
     predictions = predictions.numpy()[0]
@@ -78,7 +85,7 @@ def inference(arg):
     )
 
     depth_map = Image.fromarray(
-      (255 * normalize(lidar_input[0][:, :, 3])).astype(np.uint8))
+      (255 * normalize(lidar[0][:, :, 3])).astype(np.uint8))
     label_map = Image.fromarray(
       (255 * config.CLS_COLOR_MAP[predictions]).astype(np.uint8))
 
@@ -91,9 +98,9 @@ def inference(arg):
     blend_map.save(
       os.path.join(arg.output_dir, 'plot_' + file_name + '.png'))
 
-    # save the gt label plot
+    # save the label plot
     label_map = Image.fromarray(
-      (255 * config.CLS_COLOR_MAP[label_gt.astype(np.int32)]).astype(np.uint8)
+      (255 * config.CLS_COLOR_MAP[label.astype(np.int32)]).astype(np.uint8)
     )
     blend_map = Image.blend(
       depth_map.convert('RGBA'),
@@ -107,7 +114,8 @@ def inference(arg):
 
 if __name__ == '__main__':
   physical_devices = tf.config.experimental.list_physical_devices('GPU')
-  tf.config.experimental.set_memory_growth(physical_devices[0], True)
+  if len(physical_devices) > 0:
+    tf.config.experimental.set_memory_growth(physical_devices[0], True)
 
   parser = argparse.ArgumentParser(description='Parse Flags for the inference script!')
   parser.add_argument('-d', '--input_path', type=str,

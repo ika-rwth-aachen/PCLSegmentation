@@ -69,10 +69,10 @@ def SqueezeSegV2Config():
   mc.DENOM_EPSILON      = 1e-12   # small value used in denominator to prevent division by 0
 
   # Gradient Decent
-  mc.LEARNING_RATE      = 0.005
+  mc.LEARNING_RATE      = 0.05
   mc.LR_DECAY_STEPS     = 500
-  mc.LR_DECAY_FACTOR    = 0.99
-  mc.MAX_GRAD_NORM      = 1.0
+  mc.LR_DECAY_FACTOR    = 0.9
+  mc.MAX_GRAD_NORM      = 100.0
 
   # Network
   mc.L2_WEIGHT_DECAY    = 0.05

@@ -273,36 +273,36 @@ class SqueezeSegV2(PCLSegmentationNetwork):
     lidar_input, lidar_mask = inputs[0], inputs[1]
 
     # Encoder
-    x = tf.nn.relu(self.bn1(self.conv1(lidar_input), training))
+    x = tf.nn.relu(self.bn1(self.conv1(lidar_input)))
 
-    cam1_output = self.cam1(x, training)
+    cam1_output = self.cam1(x)
 
-    conv1_skip = self.bn1_skip(self.conv1_skip(lidar_input), training)
+    conv1_skip = self.bn1_skip(self.conv1_skip(lidar_input))
 
     x = tf.nn.max_pool2d(cam1_output, ksize=3, strides=[1, 2], padding='SAME')
-    x = self.fire2(x, training)
-    x = self.cam2(x, training)
-    x = self.fire3(x, training)
-    cam3_output = self.cam3(x, training)
+    x = self.fire2(x)
+    x = self.cam2(x)
+    x = self.fire3(x)
+    cam3_output = self.cam3(x)
 
     x = tf.nn.max_pool2d(cam3_output, ksize=3, strides=[1, 2], padding='SAME')
-    x = self.fire4(x, training)
-    fire5_output = self.fire5(x, training)
+    x = self.fire4(x)
+    fire5_output = self.fire5(x)
 
     x = tf.nn.max_pool2d(fire5_output, ksize=3, strides=[1, 2], padding='SAME')
-    x = self.fire6(x, training)
-    x = self.fire7(x, training)
-    x = self.fire8(x, training)
-    fire9_output = self.fire9(x, training)
+    x = self.fire6(x)
+    x = self.fire7(x)
+    x = self.fire8(x)
+    fire9_output = self.fire9(x)
 
     # Decoder
-    x = self.fire10(fire9_output, training)
+    x = self.fire10(fire9_output)
     x = tf.add(x, fire5_output)
-    x = self.fire11(x, training)
+    x = self.fire11(x)
     x = tf.add(x, cam3_output)
-    x = self.fire12(x, training)
+    x = self.fire12(x)
     x = tf.add(x, cam1_output)
-    x = self.fire13(x, training)
+    x = self.fire13(x)
     x = tf.add(x, conv1_skip)
 
     x = self.dropout(x, training)

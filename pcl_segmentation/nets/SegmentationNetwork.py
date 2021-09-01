@@ -90,8 +90,6 @@ class PCLSegmentationNetwork(tf.keras.Model):
 
   def train_step(self, data):
     (lidar_input, lidar_mask), label, loss_weight = data
-    lidar_input.set_shape([self.BATCH_SIZE, self.ZENITH_LEVEL, self.AZIMUTH_LEVEL, self.NUM_FEATURES])
-    lidar_mask.set_shape([self.BATCH_SIZE, self.ZENITH_LEVEL, self.AZIMUTH_LEVEL, 1])
 
     with tf.GradientTape() as tape:
       probabilities, predictions = self([lidar_input, lidar_mask], training=True)  # forward pass
@@ -115,9 +113,6 @@ class PCLSegmentationNetwork(tf.keras.Model):
   def test_step(self, data):
     (lidar_input, lidar_mask), label, loss_weight = data
 
-    lidar_input.set_shape([1, self.ZENITH_LEVEL, self.AZIMUTH_LEVEL, self.NUM_FEATURES])
-    lidar_mask.set_shape([1, self.ZENITH_LEVEL, self.AZIMUTH_LEVEL, 1])
-
     probabilities, predictions = self([lidar_input, lidar_mask], training=False)  # forward pass
 
     loss = self.focal_loss(probabilities, lidar_mask, label, loss_weight)
@@ -130,9 +125,6 @@ class PCLSegmentationNetwork(tf.keras.Model):
 
   def predict_step(self, data):
     (lidar_input, lidar_mask), _, _ = data
-
-    lidar_input.set_shape([self.BATCH_SIZE, self.ZENITH_LEVEL, self.AZIMUTH_LEVEL, self.NUM_FEATURES])
-    lidar_mask.set_shape([self.BATCH_SIZE, self.ZENITH_LEVEL, self.AZIMUTH_LEVEL, 1])
 
     probabilities, predictions = self([lidar_input, lidar_mask], training=False)  # forward pass
     return probabilities, predictions
