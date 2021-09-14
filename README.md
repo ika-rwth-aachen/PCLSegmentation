@@ -1,10 +1,10 @@
-## Semantic Segmentation of LiDAR Point Clouds in Tensorflow 2.4
+## Semantic Segmentation of LiDAR Point Clouds in Tensorflow 2.6
 [![DOI](https://zenodo.org/badge/346761395.svg)](https://zenodo.org/badge/latestdoi/346761395)
 
 ![](assets/video2.gif)
 
 This repository contains implementations of SqueezeSegV2 [1], Darknet52 [2] and Darknet21 [2] for semantic point cloud
-segmentation implemented in Keras/Tensorflow 2.4. The repository contains the model architectures, training, evaluation and
+segmentation implemented in Keras/Tensorflow 2.6. The repository contains the model architectures, training, evaluation and
 visualisation scripts.
 
 ## Usage
@@ -184,7 +184,7 @@ We hope the provided code can help in your research. If this is the case, please
 ```
 @misc{Beemelmanns2021,
   author = {Till Beemelmanns},
-  title = {Semantic Segmentation of LiDAR Point Clouds in Tensorflow 2.4},
+  title = {Semantic Segmentation of LiDAR Point Clouds in Tensorflow 2.6},
   year = 2021,
   url = {https://github.com/ika-rwth-aachen/PCLSegmentation},
   doi={10.5281/zenodo.4665751}
