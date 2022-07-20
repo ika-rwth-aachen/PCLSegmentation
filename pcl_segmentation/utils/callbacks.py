@@ -48,16 +48,26 @@ class TensorBoard(tf.keras.callbacks.TensorBoard):
     class_color_map = self.model.CLS_COLOR_MAP
 
     # get first batch of dataset
-    (lidar_input, lidar_mask), label, _ = self.dataset.take(1).get_single_element()
+    (lidar_input, lidar_mask), label, weight = self.dataset.take(1).get_single_element()
 
     probabilities, predictions = self.model([lidar_input, lidar_mask])
 
     label = label[:self.num_images, :, :]
+    weight = weight[:self.num_images, :, :].numpy()
     predictions = predictions[:self.num_images, :, :].numpy()
 
     # label and prediction visualizations
     label_image = class_color_map[label.numpy().reshape(-1)].reshape([self.num_images, label.shape[1], label.shape[2], 3])
     pred_image = class_color_map[predictions.reshape(-1)].reshape([self.num_images, label.shape[1], label.shape[2], 3])
+    weight_image = weight.reshape([self.num_images, weight.shape[1], weight.shape[2], 1])
+    depth_image = lidar_input.numpy()[:self.num_images, :, :, [4]]
+    intensity = lidar_input.numpy()[:self.num_images, :, :, [3]]
+
+    intensity_image = tf.image.resize(intensity, [intensity.shape[1]*3, intensity.shape[2]*3])
+    depth_image = tf.image.resize(depth_image, [depth_image.shape[1]*3, depth_image.shape[2]*3])
+    weight_image = tf.image.resize(weight_image, [weight.shape[1]*3, weight.shape[2]*3])
+    label_image = tf.image.resize(label_image, [label_image.shape[1]*3, label_image.shape[2]*3])
+    pred_image = tf.image.resize(pred_image, [pred_image.shape[1]*3, pred_image.shape[2]*3])
 
     # confusion matrix visualization
     figure = plot_confusion_matrix(self.model.miou_tracker.total_cm.numpy(),
@@ -66,7 +76,15 @@ class TensorBoard(tf.keras.callbacks.TensorBoard):
 
     with self.custom_tb_writer.as_default():
       tf.summary.image('Images/Depth Image',
-                       lidar_input.numpy()[:self.num_images, :, :, [4]],
+                       depth_image,
+                       max_outputs=batch_size,
+                       step=epoch)
+      tf.summary.image('Images/Intensity Image',
+                       intensity_image,
+                       max_outputs=batch_size,
+                       step=epoch)
+      tf.summary.image('Images/Weight Image',
+                       weight_image,
                        max_outputs=batch_size,
                        step=epoch)
       tf.summary.image('Images/Label Image',

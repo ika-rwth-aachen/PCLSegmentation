@@ -31,7 +31,7 @@ from utils.args_loader import load_model_config
 
 
 def evaluation(arg):
-  config, _ = load_model_config(arg.model)
+  config, _ = load_model_config(arg.model, arg.config)
 
   config.DATA_AUGMENTATION = False
   config.BATCH_SIZE = 1
@@ -74,6 +74,9 @@ if __name__ == '__main__':
                       help='Path to the model')
   parser.add_argument('-m', '--model', type=str,
                       help='Model name either `squeezesegv2`, `darknet53`, `darknet21`')
+  parser.add_argument('-n', '--config', type=str, default='squeezesegv2',
+                      help='Which configuration for training `squeezesegv2`, `squeezesegv2kitti`, '
+                           ' `darknet52`, `darknet21` ')
   args = parser.parse_args()
 
   evaluation(args)

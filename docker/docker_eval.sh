@@ -10,7 +10,7 @@ docker run \
 --user "$(id -u):$(id -g)" \
 --volume $DIR/../:/src \
 pcl_segmentation \
-python3 src/pcl_segmentation/eval.py \
+python3 /src/pcl_segmentation/eval.py \
 --data_path="/src/sample_dataset" \
 --eval_dir="/src/output/eval" \
 --path_to_model="/src/output/model" \

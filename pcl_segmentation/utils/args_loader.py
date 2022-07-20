@@ -24,24 +24,32 @@
 
 from nets.Darknet import Darknet
 from nets.SqueezeSegV2 import SqueezeSegV2
+
 from configs.SqueezeSegV2 import SqueezeSegV2Config
-from configs.Darknet52 import Darknet52
+from configs.SqueezeSegV2Kitti import SqueezeSegV2KittiConfig
+from configs.SqueezeSegV2NuScenes import SqueezeSegV2ConfigNuScenes
+from configs.Darknet53 import Darknet53
 from configs.Darknet21 import Darknet21
+from configs.Darknet53Kitti import Darknet53Kitti
+
 
 model_map = {
   "squeezesegv2": SqueezeSegV2,
-  "darknet52": Darknet,
+  "darknet53": Darknet,
   "darknet21": Darknet
 }
 
 config_map = {
   "squeezesegv2": SqueezeSegV2Config,
-  "darknet52": Darknet52,
-  "darknet21": Darknet21
+  "darknet53": Darknet53,
+  "darknet21": Darknet21,
+  "darknet53kitti": Darknet53Kitti,
+  "squeezesegv2kitti": SqueezeSegV2KittiConfig,
+  "squeezesegv2nuscenes": SqueezeSegV2ConfigNuScenes
 }
 
 
-def load_model_config(model_name):
-  config = config_map[model_name.lower()]()
+def load_model_config(model_name, config_name):
+  config = config_map[config_name.lower()]()
   model = model_map[model_name.lower()](config)
   return config, model

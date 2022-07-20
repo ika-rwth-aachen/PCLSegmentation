@@ -10,8 +10,8 @@ docker run \
 --user "$(id -u):$(id -g)" \
 --volume $DIR/../:/src \
 pcl_segmentation \
-python3 src/pcl_segmentation/train.py \
---data_path="src/sample_dataset" \
---train_dir="src/output" \
+python3 /src/pcl_segmentation/train.py \
+--data_path="/src/sample_dataset" \
+--train_dir="/src/output" \
 --epochs=5 \
 --model=squeezesegv2

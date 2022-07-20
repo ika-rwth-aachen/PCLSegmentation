@@ -1,4 +1,4 @@
-FROM tensorflow/tensorflow:2.6.0-gpu
+FROM tensorflow/tensorflow:2.9.1-gpu
 
 # install Python package dependencies
 COPY requirements.txt .

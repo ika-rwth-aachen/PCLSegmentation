@@ -32,6 +32,7 @@ import cv2
 import time
 import argparse
 
+
 sys.path.append(".")
 from configs import SqueezeSegV2Config
 
@@ -61,7 +62,7 @@ def main(args):
   else:
     outfile_path, output_mask_path = None, None
 
-  target_width = 240
+  target_width = 1024
   target_height = 32
 
   print("Number of Files:", len(input_files))
@@ -91,26 +92,28 @@ def main(args):
     for idx, f in tqdm.tqdm(enumerate(input_files), total=len(input_files)):
       lidar = np.load(f)
 
-      all_x_means.append(np.mean(lidar[:, :, 0]))
-      ov_x.include(lidar[:, :, 0])
+      lidar_mask = lidar[:, :, 4] > 0
 
-      all_y_means.append(np.mean(lidar[:, :, 1]))
-      ov_y.include(lidar[:, :, 1])
+      all_x_means.append(np.mean(lidar[:, :, 0][lidar_mask]))
+      ov_x.include(lidar[:, :, 0][lidar_mask])
 
-      all_z_means.append(np.mean(lidar[:, :, 2]))
-      ov_z.include(lidar[:, :, 2])
+      all_y_means.append(np.mean(lidar[:, :, 1][lidar_mask]))
+      ov_y.include(lidar[:, :, 1][lidar_mask])
 
-      all_i_means.append(np.mean(lidar[:, :, 3]))
-      ov_i.include(lidar[:, :, 3])
+      all_z_means.append(np.mean(lidar[:, :, 2][lidar_mask]))
+      ov_z.include(lidar[:, :, 2][lidar_mask])
 
-      all_d_means.append(np.mean(lidar[:, :, 4]))
-      ov_d.include(lidar[:, :, 4])
+      all_i_means.append(np.mean(lidar[:, :, 3][lidar_mask]))
+      ov_i.include(lidar[:, :, 3][lidar_mask])
+
+      all_d_means.append(np.mean(lidar[:, :, 4][lidar_mask]))
+      ov_d.include(lidar[:, :, 4][lidar_mask])
 
       if len(all_depths) < 5000:
         all_depths.append(lidar[:, :, 4])
 
       running_mask += np.reshape((lidar[:, :, 4] > 0), [target_height, target_width])
-
+      """
       unique, count = np.unique(lidar[:, :, 5], return_counts=True)
       for train_id, c in zip(unique, count):
         try:
@@ -120,15 +123,19 @@ def main(args):
           print("FILE: ", f)
           print("SKIPPING CURRENT SAMPLE")
           continue
+      
+      if idx % 100 == 0 and args.do_visualisation:
+        print("")
+        print(np.min(lidar[:, :, 3][lidar_mask]))
+        print(np.max(lidar[:, :, 3][lidar_mask]))
 
-      if idx % 25 == 0 and args.do_visualisation:
-        label_cloud = ((255 * config.CLS_COLOR_MAP[lidar[:, :, 5].astype(np.uint8)]).astype(np.uint8))
+        label_cloud = ((255 * config.CLS_COLOR_MAP[lidar[:, :, 5].astype(np.uint32)]).astype(np.uint8))
         label_cloud = cv2.cvtColor(label_cloud, cv2.COLOR_RGB2BGR)
         label_cloud = cv2.resize(label_cloud, (0, 0), fx=3, fy=3)
         cv2.imshow("Spherical Label Image", label_cloud)
         cv2.waitKey(1)
         time.sleep(0.05)
-
+      """
       if outfile_path:
         outfile.write(f.split("/")[-1].split(".")[0] + os.linesep)
 
@@ -183,7 +190,7 @@ if __name__ == '__main__':
   parser.add_argument('-o', '--output_dir', type=str, help='Output path to which `train.txt` and also'
                                                            '`mask.npy` is applied. If not specified, no files'
                                                            'will be written and a test run is performed.')
-  parser.add_argument('-v', '--do_visualisation', type=bool, default=True,
+  parser.add_argument('-v', '--do_visualisation', type=bool, default=False,
                       help='Visualize the data during the computation')
 
   args = parser.parse_args()

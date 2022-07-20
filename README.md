@@ -1,39 +1,31 @@
-## Semantic Segmentation of LiDAR Point Clouds in Tensorflow 2.6
-[![DOI](https://zenodo.org/badge/346761395.svg)](https://zenodo.org/badge/latestdoi/346761395)
+## Semantic Segmentation of LiDAR Point Clouds in Tensorflow 2.9.1 with SqueezeSeg
 
 ![](assets/video2.gif)
 
-This repository contains implementations of SqueezeSegV2 [1], Darknet52 [2] and Darknet21 [2] for semantic point cloud
-segmentation implemented in Keras/Tensorflow 2.6. The repository contains the model architectures, training, evaluation and
-visualisation scripts.
+This repository contains implementations of SqueezeSegV2 [1], Darknet53 [2] and Darknet21 [2] for semantic point cloud
+segmentation implemented in Keras/Tensorflow 2.9.1 The repository contains the model architectures, training, evaluation and
+visualisation scripts. We also provide scripts to load and train the public dataset
+[Semantic Kitti](http://www.semantic-kitti.org/) and [NuScenes](https://www.nuscenes.org/).
 
 ## Usage
 
-
 #### Installation
-All required libraries are listed in the `requirements.txt` file. You may install them within a [virtual environment](https://packaging.python.org/guides/installing-using-pip-and-virtual-environments/#creating-a-virtual-environment) with:
+All required libraries are listed in the `requirements.txt` file. You may install them within a 
+[virtual environment](https://packaging.python.org/guides/installing-using-pip-and-virtual-environments/#creating-a-virtual-environment)
+with:
 ```bash
 pip install -r requirements.txt
 ```
-
-For visualizations using matplotlib, you will need to install `tkinter`:
-
-`sudo apt-get install python3-tk`
 
 #### Data Format
 This repository relies on the data format as in [1]. A dataset has the following file structure:
 ```
 .
-├── ImageSet
-    ├── train.txt
-    ├── val.txt
-    ├── test.txt
 ├── train
 ├── val
 ├── test
 ```
-The data samples are located in the directories `train`, `val` and `test`. The `*.txt` files within the directory
-`ImageSet` contain the filenames for the corresponding samples in data directories.
+The data samples are located in the directories `train`, `val` and `test`.
  
  A data sample is stored as a numpy `*.npy` file. Each file contains
 a tensor of size `height X width X 6`. The 6 channels correspond to
@@ -49,10 +41,15 @@ For points in the point cloud that are not present (e.g. due to no reflection), 
 A sample dataset can be found in the directory `data`.
 
 #### Sample Dataset
-This repository provides a sample dataset which can be used as a template for your own dataset. The directory 
-`sample_dataset` a small `train` and `val` split with 32 samples and 3 samples, respectively. The samples in the train
-dataset are automatically annoated by cross-modal label transfer while the validation set was manually annotated.
-
+This repository provides several sample dataset which can be used as a template for your own dataset. The directory 
+`dataset_samples` contains the directories
+```
+.
+├── nuscenes
+├── sample_dataset
+├── semantic_kitti
+```
+Each directory in turn contains a `train` and `val` split with 32 train samples and 3 validation samples.
 
 #### Data Normalization
 For a proper data normalization it is necessary to iterate over training set and determine the __mean__ and __std__
@@ -61,16 +58,16 @@ values for each of the input fields. The script `preprocessing/inspect_training_
 ```bash
 # pclsegmentation/pcl_segmentation
 $ python3 preprocessing/inspect_training_data.py \
---input_dir="../sample_dataset/train/" \
---output_dir="../sample_dataset/ImageSet"
+--input_dir="../dataset_samples/sample_dataset/train/" \
+--output_dir="../dataset_samples/sample_dataset/ImageSet"
 ```
 The glob pattern `*.npy` is applied to the `input_dir` path. The script computes and prints the mean and std values
-for the five input fields. These values should be set in the configuration files in [pcl_segmentation/configs](pcl_segmentation/configs) as the arrays `mc.INPUT_MEAN` and
- `mc.INPUT_STD`.
+for the five input fields. These values should be set in the configuration files in
+[pcl_segmentation/configs](pcl_segmentation/configs) as the arrays `mc.INPUT_MEAN` and `mc.INPUT_STD`.
 
 #### Training
 The training of the segmentation networks can be evoked by using the `train.py` script. It is possible to choose between
-three different network architectures: `squeezesegv2` [1],  `darknet21` [2] and `darknet52` [2].
+three different network architectures: `squeezesegv2` [1],  `darknet21` [2] and `darknet53` [2].
 The training script uses the dataset splits `train` and `val`. The metrics for both splits are constantly computed
 during training. The Tensorboard callback also uses the `val` split for visualisation of the current model prediction.
 ```bash
@@ -110,7 +107,8 @@ $ python3 inference.py \
 ```
 
 ## Docker
-We also provide a docker environment for __training__, __evaluation__ and __inference__. All script can be found in the directory `docker`.
+We also provide a docker environment for __training__, __evaluation__ and __inference__. All script can be found in the 
+directory `docker`.
 
 First, build the environment with 
 ```bash
@@ -134,6 +132,46 @@ For inference on the sample dataset execute:
 ```bash
 # docker
 ./docker_inference.sh
+```
+
+## Datasets
+In the directory [dataset_convert](dataset_convert) you will find conversion scripts to convert following datasets
+to a format that can be read by the data pipeline implemented in this repository.
+
+### NuScenes
+Make sure that you have installed `nuscenes-devkit` and that you downloaded the nuScenes dataset correctly. Then execute
+the script `nu_dataset.py`
+```bash
+# dataset_convert
+$ python3 nu_dataset.py \
+--dataset /root/path/nuscenes \
+--output_dir /root/path/nuscenes/converted
+```
+The script will generate `*.npy` files into the directory `converted`. It will automatically create a train/val split.
+Make sure to create two empty directories `train` and `val`. The current implementation will perform a class reduction. 
+
+
+### Semantic Kitti
+The [Semantic Kitti](http://www.semantic-kitti.org/) dataset can be converted with the script `semantic_kitti.py`.
+```bash
+# dataset_convert
+$ python3 semantic_kitti.py \
+--dataset /root/path/semantic_kitti \
+--output_dir /root/path/semantic_kitti/converted
+```
+The script will generate `*.npy` files into the directory `converted`. It will automatically create a train/val split.
+Make sure to create two empty directories `train` and `val`. The current implementation will perform a class reduction. 
+
+### Generic PCD dataset
+The script [`pcd_dataset.py`](dataset_convert/pcd_dataset.py) allows the conversion of a labeled `*.pcd` dataset. 
+As input dataset define the directory that contains all `*.pcd` files. The pcd files need to have the field `label`.
+Check the script for more details.
+
+```bash
+# dataset_convert
+$ python3 pcd_dataset.py \
+--dataset /root/path/pcd_dataset \
+--output_dir /root/path/pcd_dataset/converted
 ```
 
 ## Tensorboard
@@ -164,29 +202,20 @@ The network architectures are based on
 - [1] [SqueezeSegV2: Improved Model Structure and Unsupervised Domain Adaptation for Road-Object Segmentation from a 
 LiDAR Point Cloud](https://github.com/xuanyuzhou98/SqueezeSegV2)
 - [2] [RangeNet++: Fast and Accurate LiDAR Semantic Segmentation](https://github.com/PRBonn/lidar-bonnetal)
-
+- [3] [Semantic Kitti](http://www.semantic-kitti.org/)
+- [4] [nuScenes](https://www.nuscenes.org/)
 
 ### TODO
 - [x] Faster input pipeline using TFRecords preprocessing
 - [x] Docker support
 - [ ] Implement CRF Postprocessing for SqueezeSegV2
-- [ ] Implement a Dataloader for the Semantic Kitti dataset
+- [x] Implement dataloader for Semantic Kitti dataset
+- [x] Implement dataloader for nuScenes dataset
+- [ ] None class handling
+- [ ] Add results for Semantic Kitti and nuScenes 
+- [x] Update to Tensorflow 2.9
 
 ### Author of this Repository
 [Till Beemelmanns](https://github.com/TillBeemelmanns)
 
 Mail: `till.beemelmanns (at) ika.rwth-aachen.de`
-
-### Citation 
-
-We hope the provided code can help in your research. If this is the case, please cite:
-
-```
-@misc{Beemelmanns2021,
-  author = {Till Beemelmanns},
-  title = {Semantic Segmentation of LiDAR Point Clouds in Tensorflow 2.6},
-  year = 2021,
-  url = {https://github.com/ika-rwth-aachen/PCLSegmentation},
-  doi={10.5281/zenodo.4665751}
-}
-```

@@ -64,6 +64,7 @@ def Darknet21():
   mc.NUM_FEATURES       = 6
 
   # Loss
+  mc.USE_FOCAL_LOSS     = False  # either use focal loss or sparse categorical cross entropy
   mc.FOCAL_GAMMA        = 2.0
   mc.CLS_LOSS_COEF      = 15.0
   mc.DENOM_EPSILON      = 1e-12   # small value used in denominator to prevent division by 0
@@ -83,7 +84,8 @@ def Darknet21():
   # Dataset
   mc.DATA_AUGMENTATION  = True
   mc.RANDOM_FLIPPING    = True
-  mc.RANDOM_SHIFT       = True
+  mc.SHIFT_UP_DOWN      = 0
+  mc.SHIFT_LEFT_RIGHT   = 70
 
   # x, y, z, intensity, distance
   mc.INPUT_MEAN         = np.array([[[24.810, 0.819, 0.000, 16.303, 25.436]]])
