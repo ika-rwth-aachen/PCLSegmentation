@@ -46,6 +46,8 @@ class PCLSegmentationNetwork(tf.keras.Model):
 
     self.softmax = tf.keras.layers.Softmax(axis=-1)
 
+    self.scc_loss = tf.keras.losses.SparseCategoricalCrossentropy()
+
     # Metrics
     self.miou_tracker = tf.keras.metrics.MeanIoU(num_classes=self.NUM_CLASS, name="MeanIoU")
     self.loss_tracker = tf.keras.metrics.Mean(name="loss")
@@ -89,11 +91,14 @@ class PCLSegmentationNetwork(tf.keras.Model):
     return loss
 
   def train_step(self, data):
-    (lidar_input, lidar_mask), label, loss_weight = data
+    (lidar_input, lidar_mask), label, weight = data
 
     with tf.GradientTape() as tape:
-      probabilities, predictions = self([lidar_input, lidar_mask], training=True)  # forward pass
-      loss = self.focal_loss(probabilities, lidar_mask, label, loss_weight)
+      probabilities, predictions = self.call([lidar_input, lidar_mask], training=True)  # forward pass
+      if self.mc.USE_FOCAL_LOSS:
+        loss = self.focal_loss(probabilities, lidar_mask, label, weight)
+      else:
+        loss = self.scc_loss(label, probabilities, weight)
 
     # Compute gradients
     trainable_vars = self.trainable_variables
@@ -105,28 +110,29 @@ class PCLSegmentationNetwork(tf.keras.Model):
     # Update & Compute Metrics
     with tf.name_scope("metrics") as scope:
       self.loss_tracker.update_state(loss)
-      self.miou_tracker.update_state(label, predictions)
+      self.miou_tracker.update_state(label, predictions, weight)
       loss_result = self.loss_tracker.result()
       miou_result = self.miou_tracker.result()
     return {'loss': loss_result, 'miou': miou_result}
 
   def test_step(self, data):
-    (lidar_input, lidar_mask), label, loss_weight = data
+    (lidar_input, lidar_mask), label, weight = data
 
-    probabilities, predictions = self([lidar_input, lidar_mask], training=False)  # forward pass
-
-    loss = self.focal_loss(probabilities, lidar_mask, label, loss_weight)
+    probabilities, predictions = self.call([lidar_input, lidar_mask], training=False)  # forward pass
+    if self.mc.USE_FOCAL_LOSS:
+      loss = self.focal_loss(probabilities, lidar_mask, label, weight)
+    else:
+      loss = self.scc_loss(label, probabilities, weight)
 
     # Update Metrics
     self.loss_tracker.update_state(loss)
-    self.miou_tracker.update_state(label, predictions)
+    self.miou_tracker.update_state(label, predictions, weight)
 
     return {'loss': self.loss_tracker.result(), 'miou': self.miou_tracker.result()}
 
   def predict_step(self, data):
     (lidar_input, lidar_mask), _, _ = data
-
-    probabilities, predictions = self([lidar_input, lidar_mask], training=False)  # forward pass
+    probabilities, predictions = self.call([lidar_input, lidar_mask], training=False)  # forward pass
     return probabilities, predictions
 
   @property
@@ -139,3 +145,7 @@ class PCLSegmentationNetwork(tf.keras.Model):
     config = super(PCLSegmentationNetwork, self).get_config()
     config.update({"mc": self.mc})
     return config
+
+  @classmethod
+  def from_config(cls, config):
+      return cls(**config)

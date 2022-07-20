@@ -1,7 +1,10 @@
-tensorflow==2.6.0
+tensorflow-gpu==2.9.1
 scipy
 tqdm
 easydict
 pillow
 opencv-python
 matplotlib
+nuscenes-devkit
+pyntcloud
+pyyaml

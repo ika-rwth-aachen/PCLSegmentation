@@ -77,6 +77,10 @@ class CAM(tf.keras.layers.Layer):
                    'l2': self.l2})
     return config
 
+  @classmethod
+  def from_config(cls, config):
+      return cls(**config)
+
 
 class FIRE(tf.keras.layers.Layer):
   """FIRE MODULE"""
@@ -131,6 +135,10 @@ class FIRE(tf.keras.layers.Layer):
                    'l2': self.l2})
     return config
 
+  @classmethod
+  def from_config(cls, config):
+      return cls(**config)
+
 
 class FIREUP(tf.keras.layers.Layer):
   """FIRE MODULE WITH TRANSPOSE CONVOLUTION"""
@@ -180,6 +188,16 @@ class FIREUP(tf.keras.layers.Layer):
     )
     self.expand3x3_bn = tf.keras.layers.BatchNormalization(momentum=self.bn_momentum)
 
+  def call(self, inputs, training=False):
+    squeeze = tf.nn.relu(self.squeeze_bn(self.squeeze(inputs), training))
+    if self.stride == 2:
+      upconv = tf.nn.relu(self.upconv(squeeze))
+    else:
+      upconv = squeeze
+    expand1x1 = tf.nn.relu(self.expand1x1_bn(self.expand1x1(upconv), training))
+    expand3x3 = tf.nn.relu(self.expand3x3_bn(self.expand3x3(upconv), training))
+    return tf.concat([expand1x1, expand3x3], axis=3)
+
   def get_config(self):
     config = super(FIREUP, self).get_config()
     config.update({'sq1x1_planes': self.sq1x1_planes,
@@ -190,15 +208,10 @@ class FIREUP(tf.keras.layers.Layer):
                    'l2': self.l2})
     return config
 
-  def call(self, inputs, training=False):
-    squeeze = tf.nn.relu(self.squeeze_bn(self.squeeze(inputs), training))
-    if self.stride == 2:
-      upconv = tf.nn.relu(self.upconv(squeeze))
-    else:
-      upconv = squeeze
-    expand1x1 = tf.nn.relu(self.expand1x1_bn(self.expand1x1(upconv), training))
-    expand3x3 = tf.nn.relu(self.expand3x3_bn(self.expand3x3(upconv), training))
-    return tf.concat([expand1x1, expand3x3], axis=3)
+  @classmethod
+  def from_config(cls, config):
+      return cls(**config)
+
 
 
 class SqueezeSegV2(PCLSegmentationNetwork):
@@ -315,3 +328,7 @@ class SqueezeSegV2(PCLSegmentationNetwork):
     config = super(SqueezeSegV2, self).get_config()
     config.update({"mc": self.mc})
     return config
+
+  @classmethod
+  def from_config(cls, config):
+      return cls(**config)

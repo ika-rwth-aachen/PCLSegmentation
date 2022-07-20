@@ -2,7 +2,7 @@
 
 DIR="$(cd -P "$(dirname "$0")" && pwd)"
 
-CUDA_VISIBLE_DEVICES=2
+CUDA_VISIBLE_DEVICES=0
 
 docker run \
 --gpus all \
@@ -13,8 +13,9 @@ docker run \
 --user "$(id -u):$(id -g)" \
 --volume $DIR/../:/src \
 pcl_segmentation \
-python3 src/pcl_segmentation/train.py \
---data_path="src/sample_dataset" \
---train_dir="src/output" \
---epochs=5 \
---model=squeezesegv2
+python3 /src/pcl_segmentation/train.py \
+--data_path="/src/nuscenes_dataset/nuscenes" \
+--train_dir="/src/output" \
+--epochs=500 \
+--model=squeezesegv2 \
+--config=squeezesegv2nuscenes

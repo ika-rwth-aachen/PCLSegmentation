@@ -29,7 +29,7 @@ import tensorflow as tf
 
 
 def _tensor_feature(value):
-  """Returns an int64_list from a bool / enum / int / uint."""
+  """Returns a bytes_list from a string / byte."""
   return tf.train.Feature(bytes_list=tf.train.BytesList(value=[tf.io.serialize_tensor(value).numpy()]))
 
 
@@ -85,9 +85,9 @@ class DataLoader:
     return lidar, mask, label, weight
 
   @staticmethod
-  def random_shift(lidar, mask, label, weight, shift=75):
+  def random_shift_lr(lidar, mask, label, weight, shift):
     """
-    Randomly shifts a sample on the y-axis
+    Randomly shifts a sample left-right
 
     Arguments:
       lidar -- Numpy ndArray of shape [height, width, channels]
@@ -106,6 +106,32 @@ class DataLoader:
     mask = tf.roll(mask, random, axis=1)
     label = tf.roll(label, random, axis=1)
     weight = tf.roll(weight, random, axis=1)
+
+    return lidar, mask, label, weight
+
+
+  @staticmethod
+  def random_shift_up_down(lidar, mask, label, weight, shift):
+    """
+    Randomly shifts a sample up-down
+
+    Arguments:
+      lidar -- Numpy ndArray of shape [height, width, channels]
+      mask -- Numpy ndArray of shape [height, width]
+      label -- Numpy ndArray of shape [height, width]
+      weight -- Numpy ndArray of shape [height, width]
+      shift -- Integer which defines the maximal amount of the random horizontal shift
+
+    Returns :
+      sample -- Numpy ndArray of shape [height, width, channels]
+    """
+    # Generate a random integer between in [-shift, shift]
+    random = tf.random.uniform(shape=[], minval=-shift, maxval=shift, dtype=tf.int32)
+
+    lidar = tf.roll(lidar, random, axis=0)
+    mask = tf.roll(mask, random, axis=0)
+    label = tf.roll(label, random, axis=0)
+    weight = tf.roll(weight, random, axis=0)
 
     return lidar, mask, label, weight
 
@@ -274,14 +300,21 @@ class DataLoader:
     weight = tf.reshape(weight, shape=[self.mc.ZENITH_LEVEL, self.mc.AZIMUTH_LEVEL])
 
     if self._data_augmentation:
-        # Perform the random left-right flip augmentation
+      # Perform the random left-right flip augmentation
+      if self.mc.RANDOM_FLIPPING:
         lidar, mask, label, weight = self.random_y_flip(lidar, mask, label, weight)
-        # Perform the random left-right shift augmentation
-        lidar, mask, label, weight = self.random_shift(lidar, mask, label, weight)
+
+      # Perform the random left-right shift augmentation
+      if self.mc.SHIFT_LEFT_RIGHT > 0:
+        lidar, mask, label, weight = self.random_shift_lr(lidar, mask, label, weight, self.mc.SHIFT_LEFT_RIGHT)
+
+      # Perform the random up-down shift augmentation
+      if self.mc.SHIFT_UP_DOWN > 0:
+        lidar, mask, label, weight = self.random_shift_up_down(lidar, mask, label, weight, self.mc.SHIFT_UP_DOWN)
 
     return (lidar, mask), label, weight
 
-  def read_tfrecord_dataset(self, buffer_size=200):
+  def read_tfrecord_dataset(self, buffer_size=1000):
     """
     Arguments:
       buffer_size -- Shuffle buffer size

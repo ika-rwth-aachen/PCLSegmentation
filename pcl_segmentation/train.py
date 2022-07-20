@@ -33,12 +33,12 @@ from utils.args_loader import load_model_config
 
 
 def train(arg):
-  config, model = load_model_config(args.model)
+  config, model = load_model_config(args.model, args.config)
 
   train = DataLoader("train", arg.data_path, config).write_tfrecord_dataset().read_tfrecord_dataset()
   val = DataLoader("val", arg.data_path, config).write_tfrecord_dataset().read_tfrecord_dataset()
 
-  tensorboard_callback = TensorBoard(arg.train_dir, val, profile_batch=(95, 100))
+  tensorboard_callback = TensorBoard(arg.train_dir, val, profile_batch=(200, 202))
   checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(os.path.join(arg.train_dir, "checkpoint"))
 
   lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(
@@ -49,7 +49,7 @@ def train(arg):
 
   optimizer = tf.keras.optimizers.Adam(learning_rate=lr_schedule, clipnorm=config.MAX_GRAD_NORM)
 
-  model.compile(optimizer=optimizer)
+  model.compile(optimizer=optimizer, weighted_metrics=[])
 
   model.fit(train,
             validation_data=val,
@@ -57,7 +57,7 @@ def train(arg):
             callbacks=[tensorboard_callback, checkpoint_callback],
             )
 
-  model.save(filepath=os.path.join(arg.train_dir, 'model'))
+  model.save(filepath=os.path.join(arg.train_dir, 'model'), save_traces=True)
 
 
 if __name__ == '__main__':
@@ -68,14 +68,15 @@ if __name__ == '__main__':
   parser = argparse.ArgumentParser(description='Parse Flags for the training script!')
   parser.add_argument('-d', '--data_path', type=str,
                       help='Absolute path to the dataset')
-  parser.add_argument('-n', '--net', type=str, default='squeezeSeg',
-                      help='Network architecture')
   parser.add_argument('-e', '--epochs', type=int, default=50,
                       help='Maximal number of training epochs')
   parser.add_argument('-t', '--train_dir', type=str,
                       help="Directory where to write the Tensorboard logs and checkpoints")
   parser.add_argument('-m', '--model', type=str,
                       help='Model name either `squeezesegv2`, `darknet53`, `darknet21`')
+  parser.add_argument('-c', '--config', type=str,
+                      help='Which configuration for training `squeezesegv2`, `squeezesegv2kitti`, '
+                           ' `darknet53`, `darknet21` ')
   args = parser.parse_args()
 
   train(args)
